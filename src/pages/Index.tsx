@@ -1,15 +1,22 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Send, Users, Plus, Hash, MoreVertical, Phone, Video } from 'lucide-react';
+import { Send, Users, Plus, Hash, MoreVertical, Phone, Video, MessageSquareReply } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { toast } from 'sonner';
+import LoginForm from '@/components/auth/LoginForm';
 import UserProfile from '@/components/chat/UserProfile';
 import MessageBubble from '@/components/chat/MessageBubble';
 import EmojiPicker from '@/components/chat/EmojiPicker';
 import FileUpload from '@/components/chat/FileUpload';
 import SearchBar from '@/components/chat/SearchBar';
+import CallScheduler from '@/components/chat/CallScheduler';
+import VoiceRecorder from '@/components/chat/VoiceRecorder';
+import StickerPicker from '@/components/chat/StickerPicker';
+import ReplySystem from '@/components/chat/ReplySystem';
+import PollCreator from '@/components/chat/PollCreator';
+import PollDisplay from '@/components/chat/PollDisplay';
 
 interface Message {
   id: string;
@@ -18,10 +25,29 @@ interface Message {
   timestamp: Date;
   roomId: string;
   status?: 'sending' | 'sent' | 'delivered' | 'read';
-  type?: 'text' | 'image' | 'file';
+  type?: 'text' | 'image' | 'file' | 'voice' | 'sticker' | 'poll' | 'call-schedule';
   fileUrl?: string;
   fileName?: string;
   fileSize?: string;
+  voiceDuration?: number;
+  replyTo?: {
+    id: string;
+    username: string;
+    content: string;
+  };
+  pollData?: {
+    question: string;
+    options: string[];
+    allowMultiple: boolean;
+    votes: Record<string, number>;
+    userVotes: string[];
+  };
+  callData?: {
+    type: 'voice' | 'video';
+    date: Date;
+    time: string;
+    title: string;
+  };
 }
 
 interface Room {
@@ -34,12 +60,13 @@ interface Room {
 }
 
 const Index = () => {
-  const [username, setUsername] = useState('');
+  const [userId, setUserId] = useState('');
   const [isAuthenticated, setIsAuthenticated] = useState(false);
   const [currentRoom, setCurrentRoom] = useState<string>('general');
   const [newMessage, setNewMessage] = useState('');
   const [messages, setMessages] = useState<Message[]>([]);
   const [searchTerm, setSearchTerm] = useState('');
+  const [replyingTo, setReplyingTo] = useState<{id: string; username: string; content: string} | null>(null);
   const [rooms, setRooms] = useState<Room[]>([
     { 
       id: 'general', 
@@ -78,50 +105,50 @@ const Index = () => {
     scrollToBottom();
   }, [messages]);
 
-  const handleLogin = () => {
-    if (username.trim().length >= 3) {
-      setIsAuthenticated(true);
-      toast.success(`Welcome to ChatHub, ${username}!`);
-      // Simulate loading some initial messages
-      const initialMessages: Message[] = [
-        {
-          id: '1',
-          username: 'Alice',
-          content: 'Hey everyone! 👋',
-          timestamp: new Date(Date.now() - 300000),
-          roomId: 'general',
-          status: 'read'
-        },
-        {
-          id: '2',
-          username: 'Bob',
-          content: 'How is everyone doing today?',
-          timestamp: new Date(Date.now() - 180000),
-          roomId: 'general',
-          status: 'delivered'
-        }
-      ];
-      setMessages(initialMessages);
-    } else {
-      toast.error('Username must be at least 3 characters long');
-    }
+  const handleLogin = (inputUserId: string, password: string) => {
+    setUserId(inputUserId);
+    setIsAuthenticated(true);
+    toast.success(`Welcome to ChatHub, ${inputUserId}!`);
+    
+    // Simulate loading some initial messages
+    const initialMessages: Message[] = [
+      {
+        id: '1',
+        username: 'Alice',
+        content: 'Hey everyone! 👋',
+        timestamp: new Date(Date.now() - 300000),
+        roomId: 'general',
+        status: 'read'
+      },
+      {
+        id: '2',
+        username: 'Bob',
+        content: 'How is everyone doing today?',
+        timestamp: new Date(Date.now() - 180000),
+        roomId: 'general',
+        status: 'delivered'
+      }
+    ];
+    setMessages(initialMessages);
   };
 
-  const sendMessage = (content: string = newMessage, type: 'text' | 'image' | 'file' = 'text', fileData?: any) => {
+  const sendMessage = (content: string = newMessage, type: 'text' | 'image' | 'file' | 'voice' | 'sticker' | 'poll' | 'call-schedule' = 'text', extraData?: any) => {
     if ((content.trim() || type !== 'text') && isAuthenticated) {
       const message: Message = {
         id: Date.now().toString(),
-        username,
+        username: userId,
         content: content.trim(),
         timestamp: new Date(),
         roomId: currentRoom,
         status: 'sending',
         type,
-        ...fileData
+        replyTo: replyingTo,
+        ...extraData
       };
       
       setMessages(prev => [...prev, message]);
       setNewMessage('');
+      setReplyingTo(null);
       
       // Simulate message status updates
       setTimeout(() => {
@@ -138,6 +165,59 @@ const Index = () => {
       
       toast.success('Message sent!');
     }
+  };
+
+  const handleVoiceNote = (audioBlob: Blob, duration: number) => {
+    const audioUrl = URL.createObjectURL(audioBlob);
+    sendMessage('Voice message', 'voice', {
+      fileUrl: audioUrl,
+      voiceDuration: duration
+    });
+  };
+
+  const handleStickerSelect = (sticker: string) => {
+    sendMessage(sticker, 'sticker');
+  };
+
+  const handleReplyToMessage = (message: Message) => {
+    setReplyingTo({
+      id: message.id,
+      username: message.username,
+      content: message.content
+    });
+  };
+
+  const handleCreatePoll = (pollData: {question: string; options: string[]; allowMultiple: boolean}) => {
+    const poll = {
+      ...pollData,
+      votes: pollData.options.reduce((acc, option) => ({ ...acc, [option]: 0 }), {}),
+      userVotes: []
+    };
+    sendMessage(pollData.question, 'poll', { pollData: poll });
+  };
+
+  const handlePollVote = (messageId: string, optionIndex: number) => {
+    setMessages(prev => prev.map(msg => {
+      if (msg.id === messageId && msg.pollData) {
+        const option = msg.pollData.options[optionIndex];
+        const newVotes = { ...msg.pollData.votes };
+        newVotes[option] = (newVotes[option] || 0) + 1;
+        
+        return {
+          ...msg,
+          pollData: {
+            ...msg.pollData,
+            votes: newVotes,
+            userVotes: [...msg.pollData.userVotes, option]
+          }
+        };
+      }
+      return msg;
+    }));
+  };
+
+  const handleScheduleCall = (callData: {type: 'voice' | 'video'; date: Date; time: string; title: string}) => {
+    sendMessage(`Scheduled ${callData.type} call: ${callData.title}`, 'call-schedule', { callData });
   };
 
   const handleFileSelect = (file: File, type: 'image' | 'file') => {
@@ -179,33 +259,7 @@ const Index = () => {
   const currentRoomData = rooms.find(r => r.id === currentRoom);
 
   if (!isAuthenticated) {
-    return (
-      <div className="min-h-screen bg-gradient-to-br from-green-50 to-blue-50 flex items-center justify-center p-4">
-        <Card className="w-full max-w-md p-8 space-y-6 bg-white/90 backdrop-blur-sm shadow-xl">
-          <div className="text-center space-y-2">
-            <h1 className="text-3xl font-bold bg-gradient-to-r from-green-600 to-blue-600 bg-clip-text text-transparent">
-              ChatHub
-            </h1>
-            <p className="text-muted-foreground">Enter your username to join the conversation</p>
-          </div>
-          <div className="space-y-4">
-            <Input
-              placeholder="Choose your username..."
-              value={username}
-              onChange={(e) => setUsername(e.target.value)}
-              onKeyPress={(e) => e.key === 'Enter' && handleLogin()}
-              className="text-center"
-            />
-            <Button 
-              onClick={handleLogin} 
-              className="w-full bg-gradient-to-r from-green-600 to-blue-600 hover:from-green-700 hover:to-blue-700"
-            >
-              Join Chat
-            </Button>
-          </div>
-        </Card>
-      </div>
-    );
+    return <LoginForm onLogin={handleLogin} />;
   }
 
   return (
@@ -213,7 +267,7 @@ const Index = () => {
       {/* Sidebar */}
       <div className="w-80 bg-white border-r border-gray-200 flex flex-col">
         <div className="p-4 border-b border-gray-200">
-          <UserProfile username={username} isOnline={true} />
+          <UserProfile username={userId} isOnline={true} />
         </div>
         
         <div className="p-4">
@@ -310,6 +364,7 @@ const Index = () => {
               </div>
             </div>
             <div className="flex items-center gap-2">
+              <CallScheduler onScheduleCall={handleScheduleCall} />
               <Button variant="ghost" size="sm">
                 <Phone className="w-5 h-5" />
               </Button>
@@ -332,11 +387,34 @@ const Index = () => {
             </div>
           ) : (
             filteredMessages.map((message) => (
-              <MessageBubble 
-                key={message.id} 
-                message={message} 
-                currentUser={username}
-              />
+              <div key={message.id} className="group relative">
+                {message.type === 'poll' && message.pollData ? (
+                  <div className="mb-4 flex justify-end">
+                    <PollDisplay
+                      poll={message.pollData}
+                      onVote={(optionIndex) => handlePollVote(message.id, optionIndex)}
+                      totalVotes={Object.values(message.pollData.votes).reduce((a, b) => a + b, 0)}
+                    />
+                  </div>
+                ) : (
+                  <div className="relative">
+                    <MessageBubble 
+                      message={message} 
+                      currentUser={userId}
+                    />
+                    {message.username !== userId && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleReplyToMessage(message)}
+                        className="absolute top-0 right-0 opacity-0 group-hover:opacity-100 transition-opacity h-6 w-6 p-0"
+                      >
+                        <MessageSquareReply className="w-3 h-3" />
+                      </Button>
+                    )}
+                  </div>
+                )}
+              </div>
             ))
           )}
           <div ref={messagesEndRef} />
@@ -344,8 +422,12 @@ const Index = () => {
 
         {/* Message Input */}
         <div className="bg-white border-t border-gray-200 p-4">
+          <ReplySystem replyingTo={replyingTo} onCancelReply={() => setReplyingTo(null)} />
           <div className="flex items-center gap-2">
             <FileUpload onFileSelect={handleFileSelect} />
+            <VoiceRecorder onVoiceNote={handleVoiceNote} />
+            <StickerPicker onStickerSelect={handleStickerSelect} />
+            <PollCreator onCreatePoll={handleCreatePoll} />
             <div className="flex-1 relative">
               <Input
                 placeholder={`Message #${currentRoomData?.name || 'general'}...`}
@@ -367,7 +449,7 @@ const Index = () => {
             </Button>
           </div>
           <p className="text-xs text-muted-foreground mt-2">
-            Use **bold**, *italic* for formatting. Upload images and files.
+            Use **bold**, *italic* for formatting. Upload files, record voice notes, send stickers, create polls, and reply to messages.
           </p>
         </div>
       </div>
