@@ -168,11 +168,49 @@ const Index = () => {
   };
 
   const handleVoiceNote = (audioBlob: Blob, duration: number) => {
+    console.log('Creating voice note:', { duration, blobSize: audioBlob.size });
+    
+    // Create a proper audio URL that persists
     const audioUrl = URL.createObjectURL(audioBlob);
-    sendMessage('Voice message', 'voice', {
+    
+    const voiceMessage: Message = {
+      id: Date.now().toString(),
+      username: userId,
+      content: 'Voice message',
+      timestamp: new Date(),
+      roomId: currentRoom,
+      status: 'sending',
+      type: 'voice',
       fileUrl: audioUrl,
-      voiceDuration: duration
-    });
+      voiceDuration: duration,
+      replyTo: replyingTo
+    };
+    
+    console.log('Voice message created:', voiceMessage);
+    
+    setMessages(prev => [...prev, voiceMessage]);
+    setReplyingTo(null);
+    
+    // Simulate message status updates
+    setTimeout(() => {
+      setMessages(prev => prev.map(msg => 
+        msg.id === voiceMessage.id ? { ...msg, status: 'sent' } : msg
+      ));
+    }, 500);
+    
+    setTimeout(() => {
+      setMessages(prev => prev.map(msg => 
+        msg.id === voiceMessage.id ? { ...msg, status: 'delivered' } : msg
+      ));
+    }, 1000);
+    
+    setTimeout(() => {
+      setMessages(prev => prev.map(msg => 
+        msg.id === voiceMessage.id ? { ...msg, status: 'read' } : msg
+      ));
+    }, 2000);
+    
+    toast.success('Voice message sent!');
   };
 
   const handleStickerSelect = (sticker: string) => {
@@ -263,10 +301,10 @@ const Index = () => {
   }
 
   return (
-    <div className="min-h-screen bg-gray-100 flex">
+    <div className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100 dark:from-gray-900 dark:to-gray-800 flex">
       {/* Sidebar */}
-      <div className="w-80 bg-white border-r border-gray-200 flex flex-col">
-        <div className="p-4 border-b border-gray-200">
+      <div className="w-80 bg-white dark:bg-gray-900 border-r border-gray-200 dark:border-gray-700 flex flex-col shadow-lg">
+        <div className="p-4 border-b border-gray-200 dark:border-gray-700 bg-gradient-to-r from-green-500 to-blue-500">
           <UserProfile username={userId} isOnline={true} />
         </div>
         
@@ -281,7 +319,7 @@ const Index = () => {
         <div className="flex-1 overflow-y-auto">
           <div className="p-4">
             <div className="flex items-center justify-between mb-4">
-              <h3 className="font-semibold text-gray-700 flex items-center gap-2">
+              <h3 className="font-semibold text-gray-700 dark:text-gray-300 flex items-center gap-2">
                 <Hash className="w-4 h-4" />
                 Rooms
               </h3>
@@ -289,14 +327,14 @@ const Index = () => {
                 size="sm"
                 variant="ghost"
                 onClick={() => setShowCreateRoom(!showCreateRoom)}
-                className="h-6 w-6 p-0"
+                className="h-6 w-6 p-0 hover:bg-green-100 hover:text-green-600"
               >
                 <Plus className="w-4 h-4" />
               </Button>
             </div>
             
             {showCreateRoom && (
-              <div className="space-y-2 mb-4">
+              <div className="space-y-2 mb-4 p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
                 <Input
                   placeholder="Room name..."
                   value={newRoomName}
@@ -305,7 +343,7 @@ const Index = () => {
                   className="text-sm"
                 />
                 <div className="flex gap-2">
-                  <Button size="sm" onClick={createRoom}>Create</Button>
+                  <Button size="sm" onClick={createRoom} className="bg-green-500 hover:bg-green-600">Create</Button>
                   <Button size="sm" variant="ghost" onClick={() => setShowCreateRoom(false)}>Cancel</Button>
                 </div>
               </div>
@@ -316,21 +354,23 @@ const Index = () => {
                 <div
                   key={room.id}
                   onClick={() => setCurrentRoom(room.id)}
-                  className={`p-3 rounded-lg cursor-pointer transition-all hover:bg-gray-50 ${
-                    currentRoom === room.id ? 'bg-green-50 border-l-4 border-green-500' : ''
+                  className={`p-3 rounded-lg cursor-pointer transition-all hover:bg-gray-50 dark:hover:bg-gray-800 ${
+                    currentRoom === room.id 
+                      ? 'bg-gradient-to-r from-green-50 to-blue-50 dark:from-green-900 dark:to-blue-900 border-l-4 border-green-500 shadow-sm' 
+                      : ''
                   }`}
                 >
                   <div className="flex items-center justify-between mb-1">
-                    <span className="font-medium"># {room.name}</span>
+                    <span className="font-medium dark:text-gray-200"># {room.name}</span>
                     {room.unreadCount! > 0 && (
-                      <Badge variant="secondary" className="bg-green-500 text-white text-xs">
+                      <Badge variant="secondary" className="bg-green-500 text-white text-xs animate-pulse">
                         {room.unreadCount}
                       </Badge>
                     )}
                   </div>
-                  <p className="text-xs text-gray-500 truncate">{room.lastMessage}</p>
+                  <p className="text-xs text-gray-500 dark:text-gray-400 truncate">{room.lastMessage}</p>
                   <div className="flex items-center justify-between mt-1">
-                    <span className="text-xs text-gray-400">
+                    <span className="text-xs text-gray-400 dark:text-gray-500">
                       {room.lastMessageTime?.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                     </span>
                     <Badge variant="outline" className="text-xs">
@@ -348,27 +388,28 @@ const Index = () => {
       {/* Main Chat Area */}
       <div className="flex-1 flex flex-col">
         {/* Chat Header */}
-        <div className="bg-white border-b border-gray-200 p-4">
+        <div className="bg-white dark:bg-gray-900 border-b border-gray-200 dark:border-gray-700 p-4 shadow-sm">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <div className="w-10 h-10 bg-gradient-to-r from-green-400 to-blue-500 rounded-full flex items-center justify-center text-white font-semibold">
+              <div className="w-12 h-12 bg-gradient-to-r from-green-400 to-blue-500 rounded-full flex items-center justify-center text-white font-bold shadow-lg">
                 #
               </div>
               <div>
-                <h1 className="text-lg font-semibold">
+                <h1 className="text-lg font-bold dark:text-gray-100">
                   {currentRoomData?.name || 'General'}
                 </h1>
-                <p className="text-sm text-gray-500">
-                  {currentRoomData?.userCount || 0} members
+                <p className="text-sm text-gray-500 dark:text-gray-400 flex items-center gap-1">
+                  <div className="w-2 h-2 bg-green-500 rounded-full"></div>
+                  {currentRoomData?.userCount || 0} members online
                 </p>
               </div>
             </div>
             <div className="flex items-center gap-2">
               <CallScheduler onScheduleCall={handleScheduleCall} />
-              <Button variant="ghost" size="sm">
+              <Button variant="ghost" size="sm" className="hover:bg-green-50 hover:text-green-600">
                 <Phone className="w-5 h-5" />
               </Button>
-              <Button variant="ghost" size="sm">
+              <Button variant="ghost" size="sm" className="hover:bg-blue-50 hover:text-blue-600">
                 <Video className="w-5 h-5" />
               </Button>
               <Button variant="ghost" size="sm">
@@ -379,11 +420,14 @@ const Index = () => {
         </div>
 
         {/* Messages Area */}
-        <div className="flex-1 overflow-y-auto p-4 bg-gray-50">
+        <div className="flex-1 overflow-y-auto p-4 bg-gradient-to-b from-gray-50 to-white dark:from-gray-800 dark:to-gray-900">
           {filteredMessages.length === 0 ? (
-            <div className="text-center text-muted-foreground py-8">
-              <Hash className="w-12 h-12 mx-auto mb-4 opacity-50" />
-              <p>No messages yet. Start the conversation!</p>
+            <div className="text-center text-muted-foreground py-12">
+              <div className="w-16 h-16 bg-gradient-to-r from-green-400 to-blue-500 rounded-full mx-auto mb-4 flex items-center justify-center">
+                <Hash className="w-8 h-8 text-white" />
+              </div>
+              <p className="text-lg font-medium mb-2">Welcome to #{currentRoomData?.name || 'general'}!</p>
+              <p className="text-sm text-gray-500">Start the conversation with a message, voice note, or sticker.</p>
             </div>
           ) : (
             filteredMessages.map((message) => (
@@ -407,7 +451,7 @@ const Index = () => {
                         variant="ghost"
                         size="sm"
                         onClick={() => handleReplyToMessage(message)}
-                        className="absolute top-0 right-0 opacity-0 group-hover:opacity-100 transition-opacity h-6 w-6 p-0"
+                        className="absolute top-0 right-0 opacity-0 group-hover:opacity-100 transition-opacity h-6 w-6 p-0 hover:bg-blue-50 hover:text-blue-600"
                       >
                         <MessageSquareReply className="w-3 h-3" />
                       </Button>
@@ -421,7 +465,7 @@ const Index = () => {
         </div>
 
         {/* Message Input */}
-        <div className="bg-white border-t border-gray-200 p-4">
+        <div className="bg-white dark:bg-gray-900 border-t border-gray-200 dark:border-gray-700 p-4 shadow-lg">
           <ReplySystem replyingTo={replyingTo} onCancelReply={() => setReplyingTo(null)} />
           <div className="flex items-center gap-2">
             <FileUpload onFileSelect={handleFileSelect} />
@@ -434,7 +478,7 @@ const Index = () => {
                 value={newMessage}
                 onChange={(e) => setNewMessage(e.target.value)}
                 onKeyPress={(e) => e.key === 'Enter' && sendMessage()}
-                className="pr-10"
+                className="pr-10 border-gray-300 dark:border-gray-600 focus:border-green-500 focus:ring-green-500"
               />
               <div className="absolute right-2 top-1/2 transform -translate-y-1/2">
                 <EmojiPicker onEmojiSelect={handleEmojiSelect} />
@@ -443,7 +487,7 @@ const Index = () => {
             <Button 
               onClick={() => sendMessage()} 
               disabled={!newMessage.trim()}
-              className="bg-green-500 hover:bg-green-600"
+              className="bg-gradient-to-r from-green-500 to-blue-500 hover:from-green-600 hover:to-blue-600 shadow-md"
             >
               <Send className="w-4 h-4" />
             </Button>
